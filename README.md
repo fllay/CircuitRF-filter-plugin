@@ -33,6 +33,18 @@ A macOS binary must be signed (ad hoc is enough) or Apple Silicon kills it at la
 `codesign` on a Mac; elsewhere sign the result with `rcodesign sign in out`. Add each built rid to `run` in
 `circuitrf-plugin/plugin.json`. Binaries are git-ignored; build them or attach them to a release.
 
+## Beta releases (GitHub Actions)
+
+`.github/workflows/release.yml` runs the tests, builds the plugin for osx-arm64, osx-x64, linux-x64, linux-arm64 and
+win-x64 (single-file, self-contained; macOS ad hoc signed), and zips each with a `plugin.json` whose `run` map lists that
+platform (`tools/package-plugin.py`). Push a tag to publish a GitHub **pre-release** with the per-platform zips and an
+all-platform zip:
+
+    git tag v0.2.0-beta.1 && git push origin v0.2.0-beta.1
+
+"Run workflow" in the Actions tab builds the same zips as workflow artifacts without releasing. macOS builds are not
+notarised: if Gatekeeper blocks one, run `xattr -dr com.apple.quarantine filtsyn-plugin`.
+
 ## Installing the plugin in CircuitRF
 
 Add `circuitrf-plugin/` (the folder holding `plugin.json`) under Tools > Plugins, then open Tools > Plugins > Filters >
