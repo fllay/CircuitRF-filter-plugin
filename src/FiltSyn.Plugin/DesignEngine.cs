@@ -153,6 +153,10 @@ internal sealed class DesignEngine
                 }
             }
             var v = HairpinVerification.Run(d, g);
+            if (!openLoop && !sub.IsStripline && d.Gaps.Length > 0 && d.Gaps.Max() > 3.0 * sub.H)
+                warnings.Add($"Hairpin gaps up to {d.Gaps.Max() * 1e3:0.##} mm ({d.Gaps.Max() / sub.H:0.#} h): at gaps this wide the circuit model overestimates the " +
+                             "coupling between hairpins (planar EM on RO4350B 0.508 mm: k 0.004 against 0.017 modelled at 1.9 mm), so the EM passband comes out " +
+                             "much narrower. Use the EM calibration loop, or the open-loop ring types, for narrow bandwidths.");
             var lossH = LossInfo.Make(sub, d.ResonatorWidth, f0, bw, g, v.FrequenciesHz, ff => new HairpinCircuitModel(d, lossy: true).Sweep(ff));
             var layout = HairpinLayout.From(d);
             var rows = new List<object?[]>
@@ -253,6 +257,9 @@ internal sealed class DesignEngine
         var notes = new List<string>();
         if (calNote is not null) notes.Add(calNote);
         notes.AddRange(d.Warnings.Where(x => x.StartsWith("Optimised", StringComparison.Ordinal)));
+        warnings.Add("EM check (planar, RO4350B 0.508 mm, 3.6 GHz, 120 MHz): the lower transmission zero landed within 0.1 % and the centre 1 % low, " +
+                     "but the passband came out 40 % narrower because the circuit model overestimates arm-to-arm coupling between the rows (about 25 %). " +
+                     "Run EM once and use Calibrate from EM result (expect a bandwidth factor near 1.6).");
         var (zl, zu) = d.Zeros;
         notes.Add($"Quasi-elliptic (Hong and Lancaster 10.1): transmission zeros at {zl / 1e9:0.####} and {zu / 1e9:0.####} GHz " +
                   $"(Omega_a {omegaA:0.##}), {rl:0.#} dB equiripple return loss. Couplings M12 = M34 = {d.Target.M[0, 1]:0.#####}, M23 = {d.Target.M[1, 2]:0.#####}, " +

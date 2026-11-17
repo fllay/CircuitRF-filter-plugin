@@ -6,8 +6,11 @@ tables, and always verify with real EM before claiming something works.
 
 ## 1. State at handoff
 
-Working and shipped (osx-arm64): coupled-line, hairpin and open-loop-ring bandpass synthesis; circuit-model response;
-layout; cell placement; EM calibration loop. 156 tests pass. The EM-validated examples are in `README.md`.
+Working and shipped (osx-arm64): coupled-line, hairpin, open-loop-ring chain and four-pole cross-coupled ring
+(quasi-elliptic) bandpass synthesis; circuit-model response with a lossy trace and Qu / insertion-loss report; layout;
+cell placement; EM calibration loop; Rogers material library with per-cell technology files. 166 tests pass. The
+EM-validated examples are in `README.md`. Fa has Hong and Lancaster, *Microstrip Filters for RF/Microwave Applications*
+(2001) as a PDF; the quasi-elliptic filter, the bend model and the loss estimate come from it (sections 10.1, 4.3.1, 3.6).
 
 Source of truth: the git repo (this one). Local copy on Fa's Mac: `/Users/fa/Desktop/Projects/filtsyn`. Fa's CircuitRF
 install lives at `/Users/fa/Desktop/Projects/circuitRF`; scratch EM workspace
@@ -22,14 +25,31 @@ OLR1, OLR2, OLR58, OLR58B and their `*_em.s2p` results).
   `HairpinCircuitModel` / `HairpinTuner` / `HairpinVerification` / `HairpinLayout`, `MicrostripGap`, `NelderMead`,
   `CouplingCurves` (`TabulatedCouplingCurve`), `CircuitRfNetlist`.
 - `FiltSyn.Plugin`: `Program` (protocol loop: hello/update/action/commit/bye; `Reply`, `Calibrate`), `DesignEngine`
-  (params to `FilterResult`; hairpin/ring/coupled branches), `CellWriter` (`.clay/.c3d/.cem`, EM window), `EmCalibration`,
+  (params to `FilterResult`; hairpin/ring/coupled/cross-coupled branches; `LossInfo`), `CellWriter` (`.clay/.c3d/.cem`, EM window), `EmCalibration`,
   `Touchstone`, `TechInfo`, `Views` (plot/artwork/table, `PortGeometry`), `Wire` (frames), `WorkspaceLinker`.
 - `circuitrf-plugin/plugin.json`: manifest (params, UI layout). Param names used by code: `filter` (choice
   Coupled-line | Hairpin | Open-loop ring), `orientation` (Alternating | Same), `tipGap`, `response`, `order`, `f0`, `bw`,
-  `ripple`, `optimize`, `medium`, `technology`, `substrateSource`, `er/h/tand/copper`, `f0Corr`, `bwCorr`, `emResult`,
+  `ripple`, `optimize`, `medium`, `technology`, `substrateSource` (From technology | Rogers material | Manual), `material`,
+  `zeroOmega`, `er/h/tand/copper`, `f0Corr`, `bwCorr`, `emResult`,
   `crfCheck`, `cellName`, `emSpan`, `emPoints`, readouts `summary`, `dims`.
 
-### Open-loop ring internals (the newest code)
+### Cross-coupled ring internals (Nov 2026, newest)
+- `QuasiEllipticPrototype` (`QuasiElliptic.cs`): `FromCurveFit(a)` = Hong eq. 10.6; `Synthesize(a, rl)` solves g1, g2, J2
+  for equiripple (interior local maximum, centre and band edge at -RL) with J1 from eq. 10.13, by continuation from the
+  fit range. `ToBandpass` gives a `GeneralCouplingMatrix` (full M, eq. 10.9). Valid Omega_a 1.3 to 6.
+- `RingNetwork` (`RingNetwork.cs`): rings = `RingPlacement(X0, Y0, Gap side, Side?)`; segments in path order from the
+  first tip (tail, 3 sides, tail); facing sides of two rings (rows/columns separated, not diagonal) become coupled pieces
+  (2-conductor `MulticonductorLine`, cached per gap); splits are mirrored between partners; corner shortening half on each
+  side of a corner as a dead zone; union-find merges tiny pieces. `Evaluate` (2 taps), `OnePort`, `ExternalQ` (S11 group
+  delay), `NaturalFrequencies` (probe at ring 0's first tip), `PointAt`.
+- `CrossCoupledRingSynthesizer` (`CrossCoupledRing.cs`): tune side, curves (electric: gaps facing; magnetic: folds facing;
+  mixed: rows, with the bottom offset), invert on the monotonic branch (electric k passes a null near 1.5 to 2 mm on
+  RO4350B), tap from Qe on outer sides only, then `Optimize` (top/bottom side scale, 3 gaps, tap; Nelder-Mead 700 evals on
+  121 points). `CrossCoupledDesign.Placements()` is symmetric about the column axis; `CrossCoupledLayout.From`.
+- Plugin: filter `Cross-coupled ring (quasi-elliptic)`, param `zeroOmega`; `DesignEngine.CrossCoupled` caches the design by
+  key; resonator Z0 falls back 50/70/90/110 ohm like the chain.
+
+### Open-loop ring internals
 - `HairpinGeometry` has `TipGap` (tail length `(BaseLength - TipGap)/2` when > 0) and `Alternate`.
   `HairpinCircuitModel.Assemble` builds nodes per ring: upright rings fold at y=0 (b-nodes), flipped rings fold at the top
   (t-nodes); tails + pi gap network on the open-end nodes; taps split the arms at `l1` and `arm - l1`.
@@ -82,14 +102,30 @@ OLR1, OLR2, OLR58, OLR58B and their `*_em.s2p` results).
   **Accurate**. EMerge Standard reads 3 to 4 % low on these resonators; do not calibrate against it.
 - Eigenmode (EMerge) on a single ring took over 5 min and stalled with absorbing walls; use driven runs with weak taps
   instead (scratch cells `SP*` in `em_cmp`, generator logic in the history of this file's commit).
-- Corner correction: `HairpinGeometry.CornerShortening` (NaN means `DefaultCornerShortening`): 0.40 W per corner for
-  rings, 0.67 W for hairpins, microstrip only, fitted on RO4350B 0.508 mm. A tap inside a corner region is clamped to
+- Corner correction: `HairpinGeometry.CornerShortening` (NaN means `DefaultCornerShortening`), microstrip only. Rings:
+  0.80 x Gupta's bend shortening (`BendShortening`, Hong eq. 4.42, W/h held >= 1.2), anchored to 0.40 W on RO4350B
+  0.508 mm, clamped 0.25 to 0.5 W; checked on RT/duroid 5880 0.787 mm (EM 0.30 to 0.32 W, predicted 0.31 W). Hairpins:
+  0.67 W (RO4350B) to 0.64 W (RT5880), linear in Er, held outside. RO3010 (Er 10.2, W/h 0.9) cells CKR*/CKH* exist in
+  `em_cmp` but were not run (planar EM there is slow: about 15 s a point); run them with ~61 points to extend the fit.
+  Generator: `/tmp/cf` C# tool in the session (gen/fit modes; regenerate from the description here if lost). A tap inside a corner region is clamped to
   the corner so the fold keeps its corrected length (this mattered: without it narrowband hairpin taps landed in the dead
   zone and broke the response).
 - Open questions: the hairpin/ring difference (open ends vs coupled arms) and the tapped straight line coming out 3.3 %
   low were not resolved; a T-junction model for the taps is the likely next physics step.
 
+- Coupling check (Nov 2026, cells QE36, RPE, RPX, RPM, HP2, HQ1 in `em_cmp`, weak taps; RPM first had taps near the fold
+  corners and gave one broad hump, redone with 0.4 mm gap-coupled probes): resonances and electric coupling agree; mixed
+  coupling is overestimated (rings 0.0263 vs EM 0.0208 at 0.98 mm; hairpins 0.0166 vs about 0.004 at 1.885 mm). Dispersion
+  is not the cause (Getsinger per-mode dispersion moves the even/odd split by 1 to 3 %); the likely cause is the corner
+  regions at the ends of the coupled sections, which the model drops while the net mixed coupling is a near-cancellation.
+  VH30 (hairpin 3 GHz / 60 MHz) failed in EM for this reason. QE36 EM: lower zero 3.478 GHz (ideal 3.482), centre
+  3.562, 3 dB bandwidth 72 MHz (designed 120), loss 4.5 dB.
+
 ## 6. Suggested next steps (not done)
+
+-1. Fix mixed coupling: sweep EM ring and hairpin pairs over gaps 0.2 to 3 mm (weak gap-coupled probes, about 4 min each),
+   then either model the corner-region coupling in `RingNetwork`/`HairpinCircuitModel` or fit a correction to the mutual
+   terms; re-run QE36 and VH30.
 
 0. Validate the corner constants on a second substrate (e.g. RT5880 0.787 mm, W/h about 3) and make them a function of W/h if needed.
 

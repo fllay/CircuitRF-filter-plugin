@@ -141,6 +141,24 @@ How it is designed (`QuasiElliptic.cs`, `RingNetwork.cs`, `CrossCoupledRing.cs`)
 5. **Optimisation** of both row sizes (asynchronous tuning, section 8.2.2: the rows are loaded differently by their
    neighbours), the three gaps and the tap on the full four-ring model against the ideal response.
 
+### EM check of the cross-coupled filter and of the coupling model (planar EM, RO4350B 0.508 mm)
+
+| Item | EM | Circuit model |
+|---|---|---|
+| QE36 filter, 3.6 GHz / 120 MHz, zeros at Omega_a = 2: lower zero | 3.478 GHz (-35 dB) | 3.452 (ideal 3.482) |
+| QE36 centre / 3 dB bandwidth / midband loss | 3.562 GHz / 72 MHz / 4.5 dB | 3.597 / 120 / 3.9 |
+| Ring pair, open gaps facing (electric), 1.41 mm | single peak at 3.600 GHz, k <= 0.003 | 3.601 GHz, k 0.0037 |
+| Ring pair, rows (mixed), 0.98 mm | k 0.0208 (3.561 / 3.636 GHz) | k 0.0263 (3.558 / 3.653) |
+| Hairpin pair, 1.885 mm (4-pole 3 GHz / 60 MHz design) | k about 0.004 | k 0.0166 |
+
+Resonant frequencies and the electric (cross) coupling agree; **mixed (arm-to-arm) coupling is overestimated** by the
+coupled-line model, by about 25 % for rings at 1 mm and about 4 times for hairpins at 1.9 mm (about 4 h), where the
+electric and magnetic parts nearly cancel and the corner regions the model leaves out matter. Consequences: the first EM
+pass of a cross-coupled ring filter comes out narrower than designed (use the calibration loop, bandwidth factor about
+1.6), and narrowband hairpins with wide gaps fail (a 2 % hairpin peaked at -18 dB in EM); the plugin warns in both cases.
+Fixing the model (coupling of the corner regions, or an EM-fitted mixed-coupling correction over a range of gaps) is the
+next accuracy step.
+
 ## Loss and resonator Q
 
 The Response tab also plots **S21 with loss** (conductor and dielectric, radiation excluded) and the summary gives the
@@ -177,7 +195,10 @@ Investigating first-pass errors (rings 4 to 9 % high, hairpins about 5 % high in
 
 ## Known limitations
 
-- Closed-form circuit models: nearest-neighbour coupling only; corners via an EM-fitted effective correction (one substrate); tap junctions and radiation not modelled.
+- Closed-form circuit models: nearest-neighbour coupling only; corners via an EM-fitted effective correction (RO4350B and
+  RT/duroid 5880, scaled with Gupta's bend model elsewhere); tap junctions and radiation not modelled.
+- Mixed (arm-to-arm) coupling is overestimated at wide gaps (see the EM check above): narrowband hairpins and the first
+  pass of cross-coupled ring filters need the EM calibration loop.
 - Open-loop ring circuit-model match to the ideal Chebyshev is moderate (RMS error about 0.07, worst in-band RL about 8 dB
   in the circuit model); EM calibration is what makes the result trustworthy.
 - The optimiser can push gaps below the fab minimum (0.152 mm in the RO4350B tech); not yet capped.
