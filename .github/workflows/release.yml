@@ -25,8 +25,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { rid: osx-arm64,   os: macos-14,       exe: filtsyn-plugin }
-          - { rid: osx-x64,     os: macos-14,       exe: filtsyn-plugin }
+          - { rid: osx-arm64,   os: macos-latest,       exe: filtsyn-plugin }
+          - { rid: osx-x64,     os: macos-latest,       exe: filtsyn-plugin }
           - { rid: linux-x64,   os: ubuntu-latest,  exe: filtsyn-plugin }
           - { rid: linux-arm64, os: ubuntu-latest,  exe: filtsyn-plugin }
           - { rid: win-x64,     os: windows-latest, exe: filtsyn-plugin.exe }
