@@ -18,6 +18,68 @@ public sealed record HairpinGeometry(
 {
     public double BaseLength => ArmGap + ResonatorWidth;
 
+    /// <summary>
+    /// How much shorter each unmitered 90-degree corner is electrically than its centreline (m). The folds lose it at each
+    /// end, the tails at the arm end. Left unset, <see cref="DefaultCornerShortening"/> applies; 0 gives the plain
+    /// centreline model.
+    /// </summary>
+    public double CornerShortening { get; init; } = double.NaN;
+
+    /// <summary>The corner shortening the model uses: the explicit value, or the default for this substrate and width.</summary>
+    public double EffectiveCornerShortening => double.IsNaN(CornerShortening) ? DefaultCornerShortening(Substrate, ResonatorWidth, TipGap > 0) : CornerShortening;
+
+    /// <summary>
+    /// Effective electrical shortening of one unmitered right-angle microstrip corner relative to its centreline, as a
+    /// fraction of the strip width. Fitted to full-wave planar EM (circuitRF MoM) of single tapped resonators on RO4350B
+    /// 0.508 mm (W/h = 2.1): open-loop rings 0.37 to 0.41 W per corner over 2.4 to 5.8 GHz and tip gaps 0.15 to 0.6 mm
+    /// (residual +/-0.35 percent). The figure is effective: it also absorbs what the model leaves out near the folds (tap
+    /// junctions, corner-to-corner interaction).
+    /// </summary>
+    public const double RingCornerShorteningPerWidth = 0.40;
+
+    /// <summary>
+    /// The same for hairpins (0.65 to 0.69 W per fold corner over 2.4 to 5 GHz). Hairpins need more than rings: the
+    /// difference is attributed to the open arm ends and the closely coupled arms, which the model also simplifies.
+    /// </summary>
+    public const double HairpinCornerShorteningPerWidth = 0.67;
+
+    /// <summary>
+    /// Default corner shortening for a microstrip ring or hairpin of strip width w; 0 (not characterised) in stripline.
+    /// Rings: the EM fit on RO4350B (0.40 W) carried to other substrates by Gupta's right-angle bend model (Hong and
+    /// Lancaster eq. 4.42): the measured ring corrections were 0.81 times the bend's electrical shortening on both
+    /// RO4350B 0.508 mm (0.40 W) and RT/duroid 5880 0.787 mm (0.30 to 0.32 W). Hairpins: 0.67 W on RO4350B and 0.64 W on
+    /// RT/duroid 5880, interpolated in Er between the two and held at the end values outside them.
+    /// </summary>
+    public static double DefaultCornerShortening(Substrate s, double w, bool openLoop = false)
+    {
+        if (s.IsStripline) return 0.0;
+        // Held between 0.25 and 0.5 W: outside W/h 2.1 to 3.0 and Er 2.2 to 3.66 the scaling is not yet checked against EM.
+        if (openLoop) return Math.Clamp(RingBendFactor * BendShortening(s, w), 0.25, 0.5) * w;
+        double t = Math.Clamp((s.Er - 2.2) / (3.66 - 2.2), 0.0, 1.0);
+        return (0.64 + t * (HairpinCornerShorteningPerWidth - 0.64)) * w;
+    }
+
+    /// <summary>
+    /// Electrical shortening of a right-angle bend (fraction of W) from Gupta's closed-form T network (Hong and Lancaster
+    /// eq. 4.42): equivalent line length sqrt(L C) / sqrt(L' C') against the centreline length W. The inductance formula
+    /// is quoted for 0.5 &lt;= W/h &lt;= 2 and turns negative below W/h of about 1.1, so W/h is held at 1.2 or more.
+    /// </summary>
+    /// <summary>Ring correction over Gupta's bend shortening, fixed by the RO4350B 0.508 mm fit (0.40 W at 50 ohm).</summary>
+    public static readonly double RingBendFactor = RingCornerShorteningPerWidth / BendShortening(RefSubstrate, Microstrip.WidthForZ0(RefSubstrate, 50.0));
+    private static Substrate RefSubstrate => new(3.66, 0.508e-3, 35e-6);
+
+    public static double BendShortening(Substrate s, double w)
+    {
+        double u = Math.Max(w / s.H, 1.2), er = s.Er, wEff = u * s.H;
+        double cPerW = u < 1 ? ((14 * er + 12.5) * u - (1.83 * er - 2.25)) / Math.Sqrt(u) + 0.02 * er / u : (9.5 * er + 1.25) * u + 5.2 * er + 7.0;
+        double c = cPerW * 1e-12 * wEff;
+        double l = 100.0 * (4.0 * Math.Sqrt(u) - 4.21) * 1e-9 * s.H;
+        var (z0, ee) = Microstrip.Static(s, wEff);
+        double lPrime = z0 * Math.Sqrt(ee) / Microstrip.C0, cPrime = Math.Sqrt(ee) / (Microstrip.C0 * z0);
+        double leq = Math.Sqrt(l * c) / Math.Sqrt(lPrime * cPrime);
+        return (wEff - leq) / wEff;
+    }
+
     /// <summary>Length of each tail of an open-loop resonator (arm centreline to the tip); zero for a plain hairpin.</summary>
     public double TailLength => TipGap > 0 ? Math.Max(0.0, (BaseLength - TipGap) / 2.0) : 0.0;
 
@@ -37,7 +99,7 @@ public readonly record struct ResponseMetrics(
 /// Circuit-level model of a hairpin filter. All arms form one multiconductor coupled line (adjacent arms
 /// of the same hairpin and of neighbouring hairpins couple through nearest-neighbour even/odd data); each
 /// fold is a single line, each open end a shunt stub of the end extension, and the 50-ohm ports sit at the tap
-/// nodes. Bends, tap junctions and non-adjacent coupling are not modelled.
+/// nodes. Corners are an effective electrical shortening (see CornerShortening); tap junctions and non-adjacent coupling are not modelled.
 /// </summary>
 public sealed class HairpinCircuitModel
 {
@@ -158,6 +220,7 @@ public sealed class HairpinCircuitModel
             tipNodes[k] = fl ? bNodes[k] : tNodes[k];
         }
         double tail = g.TailLength;
+        double corner = g.EffectiveCornerShortening;
         int[] eNodes = tail > 0 ? Alloc(n2) : tipNodes;    // open ends: the arm tips, or the tail tips of an open-loop ring
         int pin, pout;
         int extraIn = -1, extraOut = -1;
@@ -205,7 +268,7 @@ public sealed class HairpinCircuitModel
             var jwCg = new Complex(0, om * cg);
             for (int k = 0; k < n2; k++)
             {
-                AddLine(tipNodes[k], eNodes[k], tail);
+                AddLine(tipNodes[k], eNodes[k], Math.Max(tail - corner, 1e-6));
                 y[eNodes[k], eNodes[k]] += jwCp;
             }
             for (int r = 0; r < g.Order; r++)
@@ -229,24 +292,30 @@ public sealed class HairpinCircuitModel
             if (onBase && g.Order == 1)
             {
                 // Both taps on the same fold: left end -> input tap -> output tap -> right end.
-                double d = g.BaseLength / 2.0 - g.TapDistance;
+                // A tap inside a corner region sits electrically at the corner; the fold keeps its corrected length.
+                double fold = Math.Max(g.BaseLength - 2.0 * corner, 3e-6);
+                double d = Math.Clamp(g.BaseLength / 2.0 - g.TapDistance - corner, 1e-6, fold / 2.0 - 1e-6);
                 AddLine(left, extraIn, d);
-                AddLine(extraIn, extraOut, 2.0 * g.TapDistance);
+                AddLine(extraIn, extraOut, fold - 2.0 * d);
                 AddLine(extraOut, right, d);
             }
             else if (onBase && r == 0)
             {
                 double d1 = g.BaseLength / 2.0 - g.TapDistance;      // left end to tap
-                AddLine(left, extraIn, d1);
-                AddLine(extraIn, right, g.BaseLength - d1);
+                double fold = Math.Max(g.BaseLength - 2.0 * corner, 2e-6);
+                double e1 = Math.Clamp(d1 - corner, 1e-6, fold - 1e-6);
+                AddLine(left, extraIn, e1);
+                AddLine(extraIn, right, fold - e1);
             }
             else if (onBase && r == g.Order - 1)
             {
                 double d2 = g.BaseLength / 2.0 - g.TapDistance;      // tap to right end
-                AddLine(left, extraOut, g.BaseLength - d2);
-                AddLine(extraOut, right, d2);
+                double fold = Math.Max(g.BaseLength - 2.0 * corner, 2e-6);
+                double e2 = Math.Clamp(d2 - corner, 1e-6, fold - 1e-6);
+                AddLine(left, extraOut, fold - e2);
+                AddLine(extraOut, right, e2);
             }
-            else AddLine(left, right, g.BaseLength);
+            else AddLine(left, right, Math.Max(g.BaseLength - 2.0 * corner, 2e-6));
         }
 
         if (onBase) { pin = extraIn; pout = extraOut; }

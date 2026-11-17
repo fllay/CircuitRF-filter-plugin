@@ -4,8 +4,9 @@ An RF/microwave bandpass filter synthesis tool in C# (.NET 9), in the spirit of 
 **CircuitRF plugin**. Type a specification, see the circuit-model response and the layout, and place a ready-to-simulate
 cell (layout, 3D view, EMerge setup) in a CircuitRF workspace. A desktop app (Avalonia) shares the same core library.
 
-Filter types: **coupled-line (parallel-coupled)**, **hairpin**, and **square open-loop ring chain** (alternating or same
-orientation). A closed **EM calibration loop** corrects the systematic gap between the closed-form circuit models and
+Filter types: **coupled-line (parallel-coupled)**, **hairpin**, **square open-loop ring chain** (alternating or same
+orientation) and the **four-pole cross-coupled open-loop ring (quasi-elliptic)** filter of Hong and Lancaster section 10.1,
+with a transmission zero either side of the passband. A closed **EM calibration loop** corrects the systematic gap between the closed-form circuit models and
 full-wave EM.
 
 For anyone (human or agent) continuing the work, read [`docs/AGENT_HANDOFF.md`](docs/AGENT_HANDOFF.md).
@@ -54,7 +55,11 @@ CircuitRF server root).
 ## Using it
 
 1. Pick **Medium** (microstrip/stripline) and a **Technology**; Substrate *From technology* reads Er, tan d, thickness
-   and copper from the technology's stackup, or choose *Manual*.
+   and copper from the technology's stackup, *Rogers material* takes Er and tan d from a built-in library of 21 Rogers
+   laminates (RT/duroid 5870/5880/6002/6006/6010LM, RO3003/3203/3006/3010/3035, RO4003C/4350B/4360G2/4730G3/4835,
+   TMM3/4/6/10/10i/13i; thickness and copper typed in), or choose *Manual*. With *Rogers material* or *Manual* the placed
+   cell gets its own technology file, `tech/fs_<material>_<mil>mil_<copper>um.ctech`, a copy of the selected technology
+   with that dielectric, so EM and circuitRF's circuit check simulate the substrate you chose.
 2. Choose filter type, response (Chebyshev/Butterworth), order, centre frequency, bandwidth, ripple. For open-loop rings
    also **Ring orientation** and **open gap**. The Response tab overlays the circuit model on the ideal prototype.
 3. **Place cell in workspace** writes `layout/<name>.clay`, `3d/<name>.c3d` and `em/<name>.cem` (EMerge, driven).
@@ -111,9 +116,68 @@ roughly a constant 1 mm of path error). The EM window for rings is therefore at 
 always inside it and calibration can measure it. Peak EM insertion loss is about 2.5 to 3.5 dB (conductor/dielectric loss
 at about 5 % FBW; the circuit model here is lossless).
 
+## Cross-coupled open-loop ring filter (quasi-elliptic)
+
+Hong and Lancaster, *Microstrip Filters for RF/Microwave Applications* (2001), section 10.1 and Fig. 10.4(a): four square
+open-loop rings in a 2 x 2 block. Rings 1 and 4 (top row) carry the taps; 1-2 and 3-4 couple arm to arm (mixed), 2-3
+fold to fold (magnetic) and the cross coupling 1-4 through the facing open gaps (electric), which has the opposite sign
+and puts a transmission zero either side of the passband. Set **Filter type** to *Cross-coupled ring (quasi-elliptic)*
+and **Transmission zeros at +/- this many half-bandwidths** (Omega_a, 1.3 to 6; 2 puts them one bandwidth from the centre).
+The return loss follows the Chebyshev ripple (Butterworth: 20 dB); the order is fixed at 4.
+
+How it is designed (`QuasiElliptic.cs`, `RingNetwork.cs`, `CrossCoupledRing.cs`):
+
+1. **Prototype**: g1, g2 and the inverters J1 (cross) and J2 (main) of Hong's Fig. 10.2 ladder. J1 follows exactly from the
+   zero position (eq. 10.13 for n = 4: Omega_a^2 g2^2 = J2^2 - J2/J1); g1, g2, J2 are solved for an equiripple return loss,
+   starting from Hong's curve fit (eq. 10.6) and stepping out from its 1.8 to 2.4 range. Reproduces Table 10.1 to 4-5 digits.
+2. **Coupling matrix** (eq. 10.9): M12 = M34, M23, M14 (opposite sign) and Qe; the ideal response is the general
+   coupling-matrix analysis of section 8.1.
+3. **Ring network circuit model**: any arrangement of square rings as straight segments; wherever two rings face each
+   other, the overlapping parts of the facing sides are an even/odd coupled-line section. This gives electric, magnetic and
+   mixed coupling with no fitted constant. Tips use the gap pi model, corners the EM-fitted shortening.
+4. **Dimensions**: ring size tuned to f0; k(s) curves for the three coupling kinds (section 8.3, from the split of the
+   two natural frequencies) give the gaps; the bottom row shifts sideways so the main and cross gaps can differ; the tap
+   comes from Qe by the group delay of S11 of the singly loaded ring (section 8.4, tau = 4 Qe / w0).
+5. **Optimisation** of both row sizes (asynchronous tuning, section 8.2.2: the rows are loaded differently by their
+   neighbours), the three gaps and the tap on the full four-ring model against the ideal response.
+
+## Loss and resonator Q
+
+The Response tab also plots **S21 with loss** (conductor and dielectric, radiation excluded) and the summary gives the
+midband insertion loss with the resonator unloaded Q (conductor and dielectric parts). When the loss is over 3 dB a warning
+explains it with Hong eq. 3.62 (loss ~ 4.343 sum(g) / (FBW Qu)) and says which loss dominates. Example: 5.8 GHz, 100 MHz,
+4 poles on RO4350B 1.575 mm: Qu about 233 (dielectric-limited), about 5 dB midband loss.
+
+## Accuracy work: EM reference and corner correction
+
+Investigating first-pass errors (rings 4 to 9 % high, hairpins about 5 % high in EM) gave two results:
+
+1. **The 3D EM setup read low.** Single resonators solved with EMerge at *Standard* quality came out 3 to 4 % below
+   the same structures at *Accurate* quality and below circuitRF's full-wave planar (method-of-moments) solver; Accurate
+   and planar agree within about 1 %. Microstrip cells now get a **planar** EM setup as their main `.cem`
+   (`em/<name>.cem`; circuitRF allows one `.cem` per cell, so no second 3D file is staged). Stripline cells keep the 3D EMerge setup. To use 3D EMerge on a microstrip cell, set Quality to Accurate in the placed `.cem`.
+   Planar runs take a few minutes per single resonator and 15 to 20 min per 4-pole filter on an M-series MacBook Air.
+2. **Corners were the missing model element.** The circuit model treated every 90-degree corner as centreline length.
+   Fitting single resonators against planar EM (RO4350B 0.508 mm, W/h = 2.1):
+
+   | Resonator | Planar EM | Old model | With corner correction |
+   |---|---|---|---|
+   | Ring 2.4 GHz | 2.493 | +4.4 % | -0.3 % |
+   | Ring 3.6 GHz | 3.837 | +7.1 % | -0.1 % |
+   | Ring 4.8 GHz | 5.258 | +10.1 % | +0.2 % |
+   | Ring 5.8 GHz | 6.497 | +12.6 % | +0.3 % |
+   | Ring 3.6 GHz, tip gap 0.15 / 0.6 mm | 3.832 / 3.837 | +7.0 / +7.1 % | -0.2 / -0.1 % |
+   | Hairpin 2.4 / 3.6 / 5.0 GHz | 2.495 / 3.827 / 5.450 | +4.0 / +6.4 / +9.2 % | within +/-0.6 % (with 0.67 W) |
+
+   Each corner is now an effective electrical shortening of 0.40 W (rings) or 0.67 W (hairpins) per corner
+   (`HairpinGeometry.CornerShortening`, `DefaultCornerShortening`). The open-gap capacitance model was confirmed (best-fit
+   scale 1.05). The corrections are *effective*: they also absorb tap-junction and open-end effects (a straight tapped
+   half-wave line came out 3.3 % *low* in EM, so these effects pull the other way), and they were fitted on one substrate
+   only. On other substrates run EM once and use the calibration loop.
+
 ## Known limitations
 
-- Closed-form circuit models: nearest-neighbour coupling only; bends, tap junctions, radiation not modelled.
+- Closed-form circuit models: nearest-neighbour coupling only; corners via an EM-fitted effective correction (one substrate); tap junctions and radiation not modelled.
 - Open-loop ring circuit-model match to the ideal Chebyshev is moderate (RMS error about 0.07, worst in-band RL about 8 dB
   in the circuit model); EM calibration is what makes the result trustworthy.
 - The optimiser can push gaps below the fab minimum (0.152 mm in the RO4350B tech); not yet capped.

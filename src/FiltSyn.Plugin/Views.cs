@@ -27,6 +27,11 @@ internal static class Views
             new JsonObject { ["cube"] = "S11", ["y"] = "db20", ["label"] = "S11" },
             new JsonObject { ["cube"] = "S21_ideal", ["y"] = "db20", ["label"] = "S21 ideal" },
             new JsonObject { ["cube"] = "S11_ideal", ["y"] = "db20", ["label"] = "S11 ideal" });
+        if (r.Loss is { } l)
+        {
+            cubes["S21_loss"] = Cube(l.S21dB);
+            traces.Insert(1, new JsonObject { ["cube"] = "S21_loss", ["y"] = "db20", ["label"] = "S21 with loss" });
+        }
         if (crf is { } c)
         {
             cubes["S21_crf"] = Cube(c.S21dB); cubes["S11_crf"] = Cube(c.S11dB);

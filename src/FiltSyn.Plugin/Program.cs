@@ -152,6 +152,16 @@ internal sealed class Session
         if (techFile is null || string.IsNullOrEmpty(_workspace)) { reason = "the workspace's technology file was not found."; return null; }
         var f = r.Verification.FrequenciesHz;
         var cnlPath = Path.Combine(_staging, "crf_check.cnl");
+        // circuitRF's models take the substrate from the technology file, so a substrate chosen in the panel needs its own.
+        var pr = ParamsOf(msg);
+        string source = DesignEngine.Str(pr, "substrateSource", "From technology");
+        if (source != "From technology")
+        {
+            var note = new List<string>();
+            var derived = CellWriter.DerivedTech(_workspace!, $"../../tech/{techFile}", r.Substrate,
+                source == "Rogers material" ? DesignEngine.Str(pr, "material", "RO4350B") : "Custom", note);
+            techFile = Path.GetFileName(derived);
+        }
         File.WriteAllText(cnlPath, CircuitRfNetlist.Write(d, Path.Combine(_workspace!, "tech", techFile), f[0], f[^1], f.Length));
         var reply = HostCall(msg, new JsonObject { ["call"] = "simulate", ["cnl"] = cnlPath, ["analysis"] = "SP1" }, 25000);
         if (reply is null) { reason = "circuitRF did not answer the simulate request in time."; return null; }
@@ -251,7 +261,8 @@ internal sealed class Session
         var enabled = new JsonObject
         {
             ["ripple"] = DesignEngine.Str(p, "response", "Chebyshev") == "Chebyshev",
-            ["tipGap"] = DesignEngine.Str(p, "filter", "Coupled-line") == "Open-loop ring",
+            ["tipGap"] = DesignEngine.Str(p, "filter", "Coupled-line") is "Open-loop ring" or "Cross-coupled ring (quasi-elliptic)",
+            ["zeroOmega"] = DesignEngine.Str(p, "filter", "Coupled-line") == "Cross-coupled ring (quasi-elliptic)",
             ["orientation"] = DesignEngine.Str(p, "filter", "Coupled-line") == "Open-loop ring",
             ["calibrate"] = !string.IsNullOrWhiteSpace(FilePath(p["emResult"])),
         };
@@ -298,10 +309,17 @@ internal sealed class Session
             worstRl = double.IsNegativeInfinity(worst) ? v.Circuit.WorstInBandReturnLossDb : -worst;
         }
         string summary =
-            $"{(r.OpenLoop ? "Open-loop ring" : r.Hairpin ? "Hairpin" : "Coupled-line")} on {(r.Substrate.IsStripline ? "stripline" : "microstrip")}, " +
+            $"{(r.CrossCoupled ? "Cross-coupled ring (quasi-elliptic)" : r.OpenLoop ? "Open-loop ring" : r.Hairpin ? "Hairpin" : "Coupled-line")} on {(r.Substrate.IsStripline ? "stripline" : "microstrip")}, " +
             $"Er {r.Substrate.Er:0.###}, {(r.Substrate.IsStripline ? "b" : "h")} {r.Substrate.H * 1e3:0.###} mm. " +
             $"Circuit model: centre {v.Circuit.CenterHz / 1e9:0.####} GHz, 3 dB bandwidth {v.Circuit.Bandwidth3dBHz / 1e6:0.#} MHz " +
-            $"(ideal {v.Ideal.Bandwidth3dBHz / 1e6:0.#}), peak {v.Circuit.PeakS21dB:0.##} dB, worst return loss across the specified bandwidth {worstRl:0.#} dB.";
+            $"(ideal {v.Ideal.Bandwidth3dBHz / 1e6:0.#}), peak {v.Circuit.PeakS21dB:0.##} dB, worst return loss across the specified bandwidth {worstRl:0.#} dB." +
+            (r.Loss is { } ls ? $" With conductor and dielectric loss: midband insertion loss {ls.MidbandDb:0.0} dB (resonator Qu {ls.Qu:0}: conductor {ls.Qc:0}, dielectric {ls.Qd:0}; radiation not included)." : "");
+        if (r.Loss is { } lw && lw.MidbandDb > 3.0)
+            messages.Add(new JsonObject { ["severity"] = "warning", ["text"] =
+                $"Expect about {lw.MidbandDb:0.#} dB or more of passband loss: the fractional bandwidth is {r.Bandwidth / r.F0:P1} and the resonators' unloaded Q is about {lw.Qu:0} " +
+                $"(loss grows as the sum of g over FBW x Qu, Hong and Lancaster eq. 3.62, estimate {lw.EstimateDb:0.#} dB). " +
+                (lw.Qd < lw.Qc ? "Dielectric loss dominates: a lower-loss laminate (e.g. RT/duroid 5880, RO3003) helps most. " : "Conductor loss dominates: a thicker substrate (wider lines) helps most. ") +
+                "A wider bandwidth or fewer resonators also reduces it. Radiation adds to this on thick substrates." });
 
         var reply = new JsonObject
         {
@@ -317,7 +335,7 @@ internal sealed class Session
     private static IEnumerable<string> MediumNotes(FilterResult r)
     {
         if (r.OpenLoop)
-            yield return "Open-loop rings: the ring ends face each other across the open gap, modelled with a quasi-static gap capacitance (valid for gaps of roughly 0.1 to 1 times the line width). Bends and the gap ends are not modelled, so the first EM run lands several percent high (more at higher frequency, where the ring is smaller): run EM, calibrate and place again.";
+            yield return "Open-loop rings: the ring ends face each other across the open gap, modelled with a quasi-static gap capacitance (valid for gaps of roughly 0.1 to 1 times the line width). Corners carry an EM-fitted correction (planar EM on RO4350B and RT/duroid 5880, scaled between substrates with Gupta's bend model); outside Er 2.2 to 3.7 and W/h 2 to 3 run EM once and calibrate.";
         if (!r.Substrate.IsStripline) yield break;
         yield return "Stripline: epsilon_eff = Er, no dispersion; the open-end extension is an approximation.";
         if (r.Hairpin) yield return "Stripline hairpins couple only through the folds, so the reachable bandwidth is lower and the gaps tighter than in microstrip.";

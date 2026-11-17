@@ -13,26 +13,23 @@ public partial class MainWindow : Window
     private (Substrate S, double F0)? _calKey;
     private bool _busy;
 
-    // Preset list; the last entry (null) is Custom. RO4003C is stocked in 8, 20, 32 and 60 mil, RO4350B in 10, 20, 30 and 60 mil, RT/duroid 5880 in 5, 10, 15, 20, 31, 62 and 125 mil.
-    private static readonly (string Label, Func<Substrate>? Make)[] Presets =
+    // Preset list (every stocked Rogers thickness, then FR-4 and alumina); the last entry (null) is Custom.
+    private static readonly (string Label, Func<Substrate>? Make)[] Presets = BuildPresets();
+
+    private static (string Label, Func<Substrate>? Make)[] BuildPresets()
     {
-        ("Rogers RO4003C, 20 mil", () => Substrate.RogersRo4003(0.508e-3)),
-        ("Rogers RO4003C, 32 mil", () => Substrate.RogersRo4003(0.813e-3)),
-        ("Rogers RO4003C, 60 mil", () => Substrate.RogersRo4003(1.524e-3)),
-        ("Rogers RO4350B, 20 mil", () => Substrate.RogersRo4350B(0.508e-3)),
-        ("Rogers RO4350B, 30 mil", () => Substrate.RogersRo4350B(0.762e-3)),
-        ("Rogers RO4350B, 60 mil", () => Substrate.RogersRo4350B(1.524e-3)),
-        ("Rogers RT/duroid 5880, 5 mil", () => Substrate.RogersRt5880(0.127e-3)),
-        ("Rogers RT/duroid 5880, 10 mil", () => Substrate.RogersRt5880(0.254e-3)),
-        ("Rogers RT/duroid 5880, 15 mil", () => Substrate.RogersRt5880(0.381e-3)),
-        ("Rogers RT/duroid 5880, 20 mil", () => Substrate.RogersRt5880(0.508e-3)),
-        ("Rogers RT/duroid 5880, 31 mil", () => Substrate.RogersRt5880(0.787e-3)),
-        ("Rogers RT/duroid 5880, 62 mil", () => Substrate.RogersRt5880(1.575e-3)),
-        ("Rogers RT/duroid 5880, 125 mil", () => Substrate.RogersRt5880(3.175e-3)),
-        ("FR-4, 1.6 mm", () => Substrate.Fr4()),
-        ("Alumina, 25 mil", () => Substrate.Alumina()),
-        ("Custom", null),
-    };
+        var list = new List<(string, Func<Substrate>?)>();
+        foreach (var m in RogersMaterials.All)
+            foreach (int mil in m.ThicknessMil)
+            {
+                var mat = m; int t = mil;
+                list.Add(($"Rogers {m.Name}, {mil} mil", () => mat.Make(t)));
+            }
+        list.Add(("FR-4, 1.6 mm", () => Substrate.Fr4()));
+        list.Add(("Alumina, 25 mil", () => Substrate.Alumina()));
+        list.Add(("Custom", null));
+        return list.ToArray();
+    }
 
     public MainWindow()
     {

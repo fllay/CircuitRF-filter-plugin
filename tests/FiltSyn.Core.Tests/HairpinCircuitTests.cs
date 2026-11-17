@@ -148,8 +148,12 @@ public class HairpinCircuitTests : IClassFixture<HairpinFixture>
     public void CircuitQe_AgreesWithClosedFormTapFormula(double tap)
     {
         // Two independent routes: stored-energy derivation (closed form) vs group delay of the circuit model.
-        double path = 2 * _fx.Cal.TunedArmLength + _fx.A + _fx.W;
-        double formula = HairpinSynthesizer.QeFromTapAngle(tap * Math.PI / path, 50, 50);
+        // Compare in electrical coordinates: each fold corner is shorter than its centreline by the corner correction.
+        double c = HairpinGeometry.DefaultCornerShortening(_fx.Sub, _fx.W);
+        double half = (_fx.A + _fx.W) / 2.0;
+        double path = 2 * _fx.Cal.TunedArmLength + _fx.A + _fx.W - 2 * c;
+        double te = tap <= half - c ? tap : tap <= half ? half - c : tap - c;
+        double formula = HairpinSynthesizer.QeFromTapAngle(te * Math.PI / path, 50, 50);
         double circuit = _fx.Cal.Qe(tap);
         Assert.InRange(circuit / formula, 0.95, 1.05);
     }

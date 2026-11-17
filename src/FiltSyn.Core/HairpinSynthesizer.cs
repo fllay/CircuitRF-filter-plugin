@@ -309,7 +309,7 @@ public static class HairpinSynthesizer
         var (res, input, output) = BuildLayout(w, wFeed, a, arm, gaps, tap, path, feedLen, openLoop ? tipGap : 0.0, options.Alternate);
 
         warnings.Add("Dimensions are calibrated against the multiconductor circuit model (closed-form coupled-line data, " +
-                     "nearest-neighbour coupling). Bends, tap junctions and radiation are not modelled; verify with full-wave EM before building.");
+                     "nearest-neighbour coupling, corners corrected from planar EM fits on RO4350B). Tap junctions and radiation are not modelled; verify with full-wave EM before building.");
         if (openLoop && tipGap < 0.1e-3 * 0.999)
             warnings.Add($"The open gap {tipGap * 1e3:F3} mm is below 0.1 mm; check it against your fabrication limits.");
 

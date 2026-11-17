@@ -230,3 +230,25 @@ public class Rt5880Tests
 
     public static IEnumerable<object[]> All() => Thicknesses.Select(h => new object[] { h });
 }
+
+public class RogersMaterialTests
+{
+    [Fact]
+    public void LibraryIsConsistentWithLegacyFactories()
+    {
+        Assert.Equal(3.66, RogersMaterials.Find("RO4350B")!.Er);
+        Assert.Equal(Substrate.RogersRt5880().TanD, RogersMaterials.Find("rt/duroid 5880")!.TanD);
+        Assert.Equal(Substrate.RogersRo4003().Er, RogersMaterials.Find("RO4003C")!.Er);
+    }
+
+    [Fact]
+    public void EveryMaterialGivesAFiftyOhmLine()
+    {
+        foreach (var m in RogersMaterials.All)
+        {
+            var s = m.Make(m.ThicknessMil[0]);
+            double w = Microstrip.WidthForZ0(s, 50.0);
+            Assert.InRange(Microstrip.Static(s, w).Z0, 49.0, 51.0);
+        }
+    }
+}

@@ -102,14 +102,15 @@ if __name__ == "__main__":
         open(os.path.join(staging, "tech", "pcb-2layer_RO4350B_20mil_1oz.ctech"), "w").write('{"Name": "PCB 2-Layer RO4350B (20mil, 1oz)"}')
         params["techRef"] = "../../tech/pcb-2layer_RO4350B_20mil_1oz.ctech"
     if len(sys.argv) > 3 and sys.argv[3] == "olr":
-        params.update({"filter": "Open-loop ring", "orientation": os.environ.get("ORIENT", "Alternating"),
-                       "tipGap": {"value": 0.3e-3, "unit": "m"}, "medium": "Microstrip", "response": "Chebyshev", "order": 4,
+        params.update({"filter": os.environ.get("FILTER", "Open-loop ring"), "orientation": os.environ.get("ORIENT", "Alternating"),
+                       "tipGap": {"value": 0.3e-3, "unit": "m"}, "medium": "Microstrip", "response": os.environ.get("RESP","Chebyshev"), "order": 4,
                        "f0": {"value": float(os.environ.get("F0_MHZ", "3600"))*1e6, "unit": "Hz"},
                        "bw": {"value": float(os.environ.get("BW_MHZ", "150"))*1e6, "unit": "Hz"}, "er": 3.66,
-                       "h": {"value": 0.508e-3, "unit": "m"}, "tand": 0.0037, "optimize": OPT, "substrateSource": "Manual",
+                       "h": {"value": float(os.environ.get("H_MM","0.508"))*1e-3, "unit": "m"}, "tand": 0.0037, "optimize": OPT, "substrateSource": os.environ.get("SRC", "Manual"), "material": os.environ.get("MATERIAL", "RO4350B"), "copper": {"value": 17.5e-6, "unit": "m"},
                        "f0Corr": float(os.environ.get("F0CORR","1")), "bwCorr": float(os.environ.get("BWCORR","1")),
                        "emSpan": 3.0, "technology": {"id": "PCB 2-Layer RO4350B (20mil, 1oz)", "dbuPerMicron": 1000}, "techRef": "../../tech/pcb-2layer_RO4350B_20mil_1oz.ctech"})
         os.makedirs(os.path.join(staging, "tech"), exist_ok=True)
-        open(os.path.join(staging, "tech", "pcb-2layer_RO4350B_20mil_1oz.ctech"), "w").write('{"Name": "PCB 2-Layer RO4350B (20mil, 1oz)"}')
+        tp = os.path.join(staging, "tech", "pcb-2layer_RO4350B_20mil_1oz.ctech")
+        if not os.path.exists(tp): open(tp, "w").write('{"Name": "PCB 2-Layer RO4350B (20mil, 1oz)"}')
     if len(sys.argv) > 3 and sys.argv[3] == "hairpin": params["filter"] = "Hairpin"; params["bw"]["value"] = 60e6
     run(exe, staging, params, commit=True)

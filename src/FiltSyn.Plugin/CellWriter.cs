@@ -34,6 +34,10 @@ internal static class CellWriter
             else techRef = id.EndsWith(".ctech", StringComparison.OrdinalIgnoreCase) ? id : $"../../tech/{id}.ctech";
         }
 
+        string source = DesignEngine.Str(p, "substrateSource", "From technology");
+        if (source != "From technology" && !string.IsNullOrEmpty(workspace) && techRef.Length > 0)
+            techRef = DerivedTech(workspace, techRef, r.Substrate, source == "Rogers material" ? DesignEngine.Str(p, "material", "RO4350B") : "Custom", messages);
+
         var shapes = new JsonArray();
         foreach (var poly in r.Layout.Polygons.Where(x => x.Layer == FilterLayout.CopperLayer))
         {
@@ -110,8 +114,8 @@ internal static class CellWriter
 
         double span = DesignEngine.Num(p, "emSpan", 1.5);
         int npts = (int)DesignEngine.Num(p, "emPoints", 81);
-        // Open-loop rings land several percent off in the first EM run (bends and gap ends are not modelled), so keep the window wide enough to catch the passband.
-        double half = Math.Max(span * r.SpecBandwidth, r.OpenLoop ? 0.12 * r.SpecF0 : 0.0);
+        // Keep the window at least +/-5 percent of f0 so a passband that lands a little off is still caught and calibration can measure it.
+        double half = Math.Max(span * r.SpecBandwidth, 0.05 * r.SpecF0);
         double lo = (r.SpecF0 - half) / 1e9, hi = (r.SpecF0 + half) / 1e9;
         JsonObject Pad(int um, string bc = "Absorbing") => new() { ["PaddingUm"] = um, ["Boundary"] = bc };
         var cem = new JsonObject
@@ -145,8 +149,65 @@ internal static class CellWriter
         }
         Save($"{cell}/layout/{cell}.clay", clay);
         Save($"{cell}/3d/{cell}.c3d", c3d);
-        Save($"{cell}/em/{cell}.cem", cem);
+        if (r.Substrate.IsStripline) Save($"{cell}/em/{cell}.cem", cem);
+        else
+        {
+            // Microstrip: the full-wave planar (method of moments) solver is the default setup. Checked against single
+            // resonators, EMerge at Standard quality read 3 to 4 percent low and at Accurate within about 1 percent of it.
+            var planar = new JsonObject
+            {
+                ["FormatVersion"] = 1, ["Name"] = cell, ["LayoutRef"] = $"../layout/{cell}.clay",
+                ["Frequency"] = cem["Frequency"]!.DeepClone(),
+                ["Port1Z0Real"] = 50, ["Port2Z0Real"] = 50,
+                ["DispersionCorrection"] = true, ["AnalysisKind"] = "Planar",
+            };
+            // circuitRF accepts exactly one .cem per placed cell, so the 3D EMerge setup is not staged alongside.
+            Save($"{cell}/em/{cell}.cem", planar);
+        }
         return files;
+    }
+
+    /// <summary>
+    /// The placed cell takes its stack-up from its technology file, so a substrate chosen in the panel (a Rogers material
+    /// or manual values) needs a technology that says the same. Copies the selected technology, sets the dielectric
+    /// Er, tan d and thickness and the copper thickness, saves it next to it in the workspace's tech folder and returns
+    /// its cell-relative reference. Falls back to the original reference (with a message) when that is not possible.
+    /// </summary>
+    internal static string DerivedTech(string workspace, string techRef, Substrate s, string material, List<string> messages)
+    {
+        try
+        {
+            var dir = Path.Combine(workspace, "tech");
+            var srcFile = Path.Combine(dir, Path.GetFileName(techRef));
+            if (!File.Exists(srcFile)) { messages.Add("The cell uses the selected technology's stack-up: its file was not found to derive one from."); return techRef; }
+            var root = JsonNode.Parse(File.ReadAllText(srcFile)) as JsonObject ?? throw new InvalidOperationException("not an object");
+            var layers = (root["Stackup"] as JsonObject)?["Layers"] as JsonArray ?? throw new InvalidOperationException("no stack-up");
+            var diel = layers.OfType<JsonObject>().Where(l => l["Kind"]?.GetValue<string>() == "Dielectric").ToList();
+            if (diel.Count == 0 || diel.Count > 2) { messages.Add("The technology's stack-up has an unexpected dielectric layout, so the cell keeps its own stack-up instead of the chosen substrate."); return techRef; }
+            double dbu = root["DbuPerMicron"]?.GetValue<double>() ?? 1000;
+            double ToDbu(double m) => Math.Round(m * 1e6 * dbu);
+            string label = material.Replace(' ', '-').Replace('/', '-');
+            string mil = (s.H / 25.4e-6 * (s.IsStripline && diel.Count == 2 ? 0.5 : 1)).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
+            foreach (var d in diel)
+            {
+                d["Epsr"] = s.Er; d["TanD"] = s.TanD; d["Material"] = material;
+                d["Name"] = material;
+                d["ThicknessDbu"] = ToDbu(s.IsStripline && diel.Count == 2 ? s.H / 2 : s.H);
+            }
+            foreach (var c in layers.OfType<JsonObject>().Where(l => l["Kind"]?.GetValue<string>() == "Conductor" && l["Material"]?.GetValue<string>() == "Copper"))
+                c["ThicknessDbu"] = ToDbu(s.T);
+            string name = $"{label}_{mil}mil_{s.T * 1e6:0.#}um";
+            root["Name"] = $"{material} ({mil} mil{(s.IsStripline ? " cores" : "")}, Er {s.Er:0.###}, tan d {s.TanD})";
+            string file = $"fs_{name}.ctech";
+            File.WriteAllText(Path.Combine(dir, file), root.ToJsonString(Pretty));
+            messages.Add($"Technology 'tech/{file}' was written with the chosen substrate and the cell placed on it.");
+            return $"../../tech/{file}";
+        }
+        catch (Exception e)
+        {
+            messages.Add($"Could not write a technology file for the chosen substrate ({e.Message}); the cell keeps the selected technology's stack-up.");
+            return techRef;
+        }
     }
 
     private static int Layer(TechInfo t, string name, int fallback)

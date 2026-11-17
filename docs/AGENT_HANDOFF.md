@@ -76,7 +76,23 @@ OLR1, OLR2, OLR58, OLR58B and their `*_em.s2p` results).
 - Keep non-alternate (plain hairpin) numerical results identical when touching `Assemble`; the 151 older tests guard it.
 - Prefer verification by real EM over circuit-model arguments. Say plainly what was and was not verified.
 
+## 5b. Accuracy findings (Nov 2026)
+
+- EM reference: use circuitRF's **planar** solver (AnalysisKind Planar, no SignalStackupLayerName needed) or EMerge at
+  **Accurate**. EMerge Standard reads 3 to 4 % low on these resonators; do not calibrate against it.
+- Eigenmode (EMerge) on a single ring took over 5 min and stalled with absorbing walls; use driven runs with weak taps
+  instead (scratch cells `SP*` in `em_cmp`, generator logic in the history of this file's commit).
+- Corner correction: `HairpinGeometry.CornerShortening` (NaN means `DefaultCornerShortening`): 0.40 W per corner for
+  rings, 0.67 W for hairpins, microstrip only, fitted on RO4350B 0.508 mm. A tap inside a corner region is clamped to
+  the corner so the fold keeps its corrected length (this mattered: without it narrowband hairpin taps landed in the dead
+  zone and broke the response).
+- Open questions: the hairpin/ring difference (open ends vs coupled arms) and the tapped straight line coming out 3.3 %
+  low were not resolved; a T-junction model for the taps is the likely next physics step.
+
 ## 6. Suggested next steps (not done)
+
+0. Validate the corner constants on a second substrate (e.g. RT5880 0.787 mm, W/h about 3) and make them a function of W/h if needed.
+
 
 1. **Bend/gap-end compensation** for rings: model the roughly constant (about 1 mm) path error from corners and gap ends so the
    first EM run lands closer; fit against the EM results for 3.6 and 5.8 GHz (and add a third frequency).
