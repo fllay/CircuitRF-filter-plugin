@@ -1,0 +1,373 @@
+{
+  "apiVersion": 1,
+  "id": "fa.filtsyn",
+  "name": "Filter Synthesis (hairpin and coupled-line)",
+  "version": "0.1.0",
+  "summary": "Bandpass filter synthesis on microstrip or stripline: hairpin and edge-coupled, with a circuit-model response and a ready-to-simulate cell.",
+  "author": "Fa",
+  "license": "MIT",
+  "minCircuitRF": "1.8.0",
+  "run": {
+    "osx-arm64": {
+      "exe": "bin/osx-arm64/filtsyn-plugin"
+    }
+  },
+  "kind": "panel",
+  "menu": "Filters",
+  "timeouts": {
+    "update": 120,
+    "action": 900
+  },
+  "params": [
+    {
+      "name": "filter",
+      "kind": "choice",
+      "options": [
+        "Coupled-line",
+        "Hairpin",
+        "Open-loop ring"
+      ],
+      "default": "Coupled-line"
+    },
+    {
+      "name": "response",
+      "kind": "choice",
+      "options": [
+        "Chebyshev",
+        "Butterworth"
+      ],
+      "default": "Chebyshev"
+    },
+    {
+      "name": "order",
+      "kind": "int",
+      "min": 2,
+      "max": 9,
+      "default": 4,
+      "chars": 4
+    },
+    {
+      "name": "f0",
+      "kind": "quantity",
+      "unit": "Hz",
+      "default": "3.5 GHz",
+      "min": "1 MHz",
+      "chars": 12
+    },
+    {
+      "name": "bw",
+      "kind": "quantity",
+      "unit": "Hz",
+      "default": "200 MHz",
+      "min": "1 kHz",
+      "chars": 12
+    },
+    {
+      "name": "ripple",
+      "kind": "quantity",
+      "unit": "dB",
+      "default": "0.1 dB",
+      "min": "0.001 dB",
+      "chars": 10
+    },
+    {
+      "name": "optimize",
+      "kind": "bool",
+      "default": true
+    },
+    {
+      "name": "orientation",
+      "kind": "choice",
+      "options": [
+        "Alternating",
+        "Same"
+      ],
+      "default": "Alternating"
+    },
+    {
+      "name": "tipGap",
+      "kind": "quantity",
+      "unit": "metre",
+      "default": "0.3 mm",
+      "min": "10 um",
+      "chars": 10
+    },
+    {
+      "name": "medium",
+      "kind": "choice",
+      "options": [
+        "Microstrip",
+        "Stripline"
+      ],
+      "default": "Stripline"
+    },
+    {
+      "name": "technology",
+      "kind": "technology"
+    },
+    {
+      "name": "substrateSource",
+      "kind": "choice",
+      "options": [
+        "From technology",
+        "Manual"
+      ],
+      "default": "From technology"
+    },
+    {
+      "name": "er",
+      "kind": "real",
+      "min": 1,
+      "default": 2.2,
+      "chars": 8
+    },
+    {
+      "name": "h",
+      "kind": "quantity",
+      "unit": "metre",
+      "default": "1.575 mm",
+      "min": "1 um",
+      "chars": 12
+    },
+    {
+      "name": "tand",
+      "kind": "real",
+      "min": 0,
+      "default": 0.0009,
+      "chars": 8
+    },
+    {
+      "name": "copper",
+      "kind": "quantity",
+      "unit": "metre",
+      "default": "35 um",
+      "min": "0 um",
+      "chars": 10
+    },
+    {
+      "name": "f0Corr",
+      "kind": "real",
+      "min": 0.5,
+      "max": 2,
+      "default": 1,
+      "chars": 8
+    },
+    {
+      "name": "bwCorr",
+      "kind": "real",
+      "min": 0.5,
+      "max": 2,
+      "default": 1,
+      "chars": 8
+    },
+    {
+      "name": "emResult",
+      "kind": "string",
+      "default": "",
+      "chars": 40
+    },
+    {
+      "name": "crfCheck",
+      "kind": "bool",
+      "default": false
+    },
+    {
+      "name": "cellName",
+      "kind": "string",
+      "default": "FILTER",
+      "chars": 24
+    },
+    {
+      "name": "emSpan",
+      "kind": "real",
+      "min": 0.5,
+      "max": 10,
+      "default": 1.5,
+      "chars": 6
+    },
+    {
+      "name": "emPoints",
+      "kind": "int",
+      "min": 11,
+      "max": 501,
+      "default": 81,
+      "chars": 6
+    },
+    {
+      "name": "summary",
+      "kind": "readout"
+    },
+    {
+      "name": "dims",
+      "kind": "readout"
+    }
+  ],
+  "ui": {
+    "title": "Filter Synthesis",
+    "size": [
+      1280,
+      800
+    ],
+    "layout": {
+      "split": "horizontal",
+      "sizes": [
+        1,
+        3
+      ],
+      "children": [
+        {
+          "column": [
+            {
+              "group": "Specification",
+              "children": [
+                {
+                  "param": "filter",
+                  "label": "Filter type"
+                },
+                {
+                  "param": "response",
+                  "label": "Response"
+                },
+                {
+                  "param": "order",
+                  "label": "Order"
+                },
+                {
+                  "param": "f0",
+                  "label": "Centre frequency"
+                },
+                {
+                  "param": "bw",
+                  "label": "Passband bandwidth"
+                },
+                {
+                  "param": "ripple",
+                  "label": "Ripple (Chebyshev)"
+                },
+                {
+                  "param": "optimize",
+                  "label": "Optimise on the circuit model"
+                },
+                {
+                  "param": "orientation",
+                  "label": "Ring orientation (open-loop ring)"
+                },
+                {
+                  "param": "tipGap",
+                  "label": "Ring open gap (open-loop ring)"
+                }
+              ]
+            },
+            {
+              "group": "Medium and substrate",
+              "children": [
+                {
+                  "param": "medium",
+                  "label": "Medium"
+                },
+                {
+                  "param": "technology",
+                  "label": "Technology"
+                },
+                {
+                  "param": "substrateSource",
+                  "label": "Substrate"
+                },
+                {
+                  "param": "er",
+                  "label": "Er (manual)"
+                },
+                {
+                  "param": "h",
+                  "label": "h, or plane spacing b (manual)"
+                },
+                {
+                  "param": "tand",
+                  "label": "tan d (manual)"
+                },
+                {
+                  "param": "copper",
+                  "label": "Copper thickness (manual)"
+                }
+              ]
+            },
+            {
+              "group": "Placement",
+              "children": [
+                {
+                  "param": "crfCheck",
+                  "label": "Also check with circuitRF's circuit models (microstrip coupled-line)"
+                },
+                {
+                  "param": "cellName",
+                  "label": "Cell name"
+                },
+                {
+                  "param": "emSpan",
+                  "label": "EM span (x bandwidth each side)"
+                },
+                {
+                  "param": "emPoints",
+                  "label": "EM frequency points"
+                },
+                {
+                  "note": "After placing the cell and running EM, paste the path of its .s2p result below and calibrate; place again and repeat until the EM centre and bandwidth settle."
+                },
+                {
+                  "param": "emResult",
+                  "label": "EM result path (.s2p) of the placed cell"
+                },
+                {
+                  "param": "f0Corr",
+                  "label": "Design centre factor (EM calibration)"
+                },
+                {
+                  "param": "bwCorr",
+                  "label": "Design bandwidth factor (EM calibration)"
+                },
+                {
+                  "button": "Calibrate from EM result",
+                  "action": "calibrate"
+                },
+                {
+                  "button": "Reset calibration",
+                  "action": "resetCalibration"
+                },
+                {
+                  "button": "Place cell in workspace",
+                  "action": "commit"
+                }
+              ]
+            },
+            {
+              "readout": "summary",
+              "as": "text"
+            },
+            {
+              "messages": true
+            }
+          ]
+        },
+        {
+          "tabs": [
+            {
+              "title": "Response",
+              "view": "response",
+              "kind": "plot"
+            },
+            {
+              "title": "Layout",
+              "view": "artwork",
+              "kind": "layout"
+            },
+            {
+              "title": "Dimensions",
+              "view": "dims",
+              "kind": "table"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

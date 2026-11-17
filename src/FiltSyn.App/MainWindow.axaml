@@ -1,0 +1,66 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:app="clr-namespace:FiltSyn.App"
+        xmlns:sp="clr-namespace:ScottPlot.Avalonia;assembly=ScottPlot.Avalonia"
+        x:Class="FiltSyn.App.MainWindow"
+        Title="FiltSyn - Bandpass Filter Synthesis"
+        Width="1200" Height="760">
+  <Grid ColumnDefinitions="300,*">
+    <ScrollViewer Grid.Column="0"><StackPanel Margin="12" Spacing="8">
+      <TextBlock Text="Specification" FontSize="16" FontWeight="SemiBold"/>
+
+      <TextBlock Text="Filter type"/>
+      <ComboBox x:Name="FilterBox" SelectedIndex="0" HorizontalAlignment="Stretch">
+        <ComboBoxItem>Hairpin bandpass</ComboBoxItem>
+        <ComboBoxItem>Coupled-line bandpass</ComboBoxItem>
+      </ComboBox>
+
+      <TextBlock Text="Response type"/>
+      <ComboBox x:Name="TypeBox" SelectedIndex="0" HorizontalAlignment="Stretch">
+        <ComboBoxItem>Chebyshev</ComboBoxItem>
+        <ComboBoxItem>Butterworth</ComboBoxItem>
+      </ComboBox>
+
+      <TextBlock Text="Center frequency (MHz)"/>
+      <TextBox x:Name="F0Box" Text="2000"/>
+
+      <TextBlock Text="Passband bandwidth (MHz)"/>
+      <TextBox x:Name="BwBox" Text="30"/>
+
+      <TextBlock Text="Passband ripple (dB, Chebyshev)"/>
+      <TextBox x:Name="RippleBox" Text="0.1"/>
+
+      <TextBlock Text="Order"/>
+      <NumericUpDown x:Name="OrderBox" Minimum="1" Maximum="15" Value="4" FormatString="0"/>
+
+      <TextBlock Text="Transmission-line medium" FontWeight="SemiBold" Margin="0,6,0,0"/>
+      <ComboBox x:Name="MediumBox" HorizontalAlignment="Stretch" SelectedIndex="0">
+        <ComboBoxItem>Microstrip</ComboBoxItem>
+        <ComboBoxItem>Stripline (strip between two ground planes)</ComboBoxItem>
+      </ComboBox>
+
+      <TextBlock Text="Substrate" FontWeight="SemiBold" Margin="0,6,0,0"/>
+      <ComboBox x:Name="SubstrateBox" HorizontalAlignment="Stretch"/>
+      <TextBlock x:Name="StackNote" Foreground="Gray" FontSize="11" TextWrapping="Wrap" IsVisible="False"
+                 Text="Stripline presets are two cores around the strip (e.g. 31 mil gives b = 62 mil = 1.575 mm)."/>
+      <Grid ColumnDefinitions="*,*,*" ColumnSpacing="6">
+        <StackPanel Grid.Column="0"><TextBlock Text="Er"/><TextBox x:Name="ErBox"/></StackPanel>
+        <StackPanel Grid.Column="1"><TextBlock x:Name="HLabel" Text="h (mm)"/><TextBox x:Name="HBox"/></StackPanel>
+        <StackPanel Grid.Column="2"><TextBlock Text="tan d"/><TextBox x:Name="TanDBox"/></StackPanel>
+      </Grid>
+
+      <Button x:Name="SynthButton" Content="Synthesize" HorizontalAlignment="Stretch" Margin="0,8,0,0"/>
+      <Button x:Name="ExportButton" Content="Export DXF..." HorizontalAlignment="Stretch" IsEnabled="False"/>
+
+      <TextBlock x:Name="StatusText" Foreground="OrangeRed" TextWrapping="Wrap"/>
+      <TextBlock Text="Prototype and couplings" FontWeight="SemiBold" Margin="0,8,0,0"/>
+      <TextBox x:Name="OutputBox" IsReadOnly="True" AcceptsReturn="True" Height="220"
+               FontFamily="Menlo,Consolas,monospace" FontSize="12"/>
+    </StackPanel></ScrollViewer>
+
+    <TabControl Grid.Column="1" Margin="4">
+      <TabItem Header="Response"><sp:AvaPlot x:Name="Plot"/></TabItem>
+      <TabItem Header="Layout"><app:LayoutView x:Name="LayoutPreview"/></TabItem>
+    </TabControl>
+  </Grid>
+</Window>
