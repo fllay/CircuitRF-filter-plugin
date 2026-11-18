@@ -183,6 +183,15 @@ Check against EM of the filters designed with the old model (exact geometry, los
 | QE36 lower zero | 3.478 GHz | 3.434 | 3.50 |
 | VH30 hairpin 3 GHz, 3 dB bandwidth | 18.5 MHz | 59.9 | 17.0 |
 
+New designs with the corrected model, planar EM (RO4350B 0.508 mm):
+
+| Filter | EM | Designed (lossless model) |
+|---|---|---|
+| VH30B hairpin 3.0 GHz / 35 MHz: centre, 3 dB bandwidth | 2.990 GHz, 41.1 MHz | 3.000 GHz, 42.5 MHz |
+| VH30B in-band S11, midband loss | -11.7 dB, 8.9 dB | -13 dB, (lossy model 12.7 dB) |
+
+The lossy model overstates the loss of narrow filters (12.7 against 8.9 dB here), so its loss figure is conservative.
+
 Consequence: same-orientation hairpins on RO4350B 0.508 mm reach only k of about 0.012 (EM), so a 4-pole hairpin wider
 than about 1.4 % is refused with that reason; use the open-loop ring chain (k up to 0.14 to 0.19) for wider bands. The
 correction was measured on one substrate; on others it is applied by s/h and should be confirmed with one EM run.
