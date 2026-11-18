@@ -121,11 +121,19 @@ OLR1, OLR2, OLR58, OLR58B and their `*_em.s2p` results).
   VH30 (hairpin 3 GHz / 60 MHz) failed in EM for this reason. QE36 EM: lower zero 3.478 GHz (ideal 3.482), centre
   3.562, 3 dB bandwidth 72 MHz (designed 120), loss 4.5 dB.
 
+- Coupling correction (done, `CouplingCorrection.cs`): table of EM/model k ratio by kind and s/h, applied as a scale on the
+  off-diagonal (mutual) C and Ca of each coupled pair in `MulticonductorLine.FromMicrostrip(..., mutualScale)`; self terms
+  unscaled so resonances stay put. Fit tool: build model k for the pair geometry with `CouplingCorrection.Override` and
+  bisect the scale to the EM k (pair geometries are in README). `Enabled` switches it off for experiments. EM k extraction
+  for the `K*` cells: `~/kpeaks.py` on the Mac session (two highest S21 peaks, parabolic refine).
+- Hairpin coupling is weak and saturating on RO4350B 0.508 mm (EM k 0.0119 at 0.5 mm, 0.0103 at 1.0 mm): the hairpin
+  synthesiser now refuses 4-pole designs wider than about 1.4 %. Hong's hairpins use thicker, lower-Er boards and wider
+  bands; check the table on such a board before trusting it there.
+
 ## 6. Suggested next steps (not done)
 
--1. Fix mixed coupling: sweep EM ring and hairpin pairs over gaps 0.2 to 3 mm (weak gap-coupled probes, about 4 min each),
-   then either model the corner-region coupling in `RingNetwork`/`HairpinCircuitModel` or fit a correction to the mutual
-   terms; re-run QE36 and VH30.
+-1. Repeat the pair sweep on a second substrate (RT/duroid 5880 0.787 mm cells can be generated the same way) to confirm
+   that the correction depends on s/h alone; hairpins with other arm gaps (the hairpin ratio may depend on the arm gap).
 
 0. Validate the corner constants on a second substrate (e.g. RT5880 0.787 mm, W/h about 3) and make them a function of W/h if needed.
 

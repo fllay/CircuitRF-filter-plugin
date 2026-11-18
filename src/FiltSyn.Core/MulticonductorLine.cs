@@ -53,7 +53,7 @@ public sealed class MulticonductorLine
     /// matrices are assembled from the isolated-line and nearest-neighbour even/odd-mode data, with the
     /// ground capacitance reduced by the fringing each neighbour removes (first-order superposition).
     /// </summary>
-    public static MulticonductorLine FromMicrostrip(Substrate s, double w, double[] gaps)
+    public static MulticonductorLine FromMicrostrip(Substrate s, double w, double[] gaps, double[]? mutualScale = null)
     {
         int n = gaps.Length + 1;
         double c = Microstrip.C0;
@@ -87,8 +87,10 @@ public sealed class MulticonductorLine
             C[i, i] += cg[i]; Ca[i, i] += cag[i];
             if (i < n - 1)
             {
-                C[i, i] += cm[i]; C[i + 1, i + 1] += cm[i]; C[i, i + 1] = C[i + 1, i] = -cm[i];
-                Ca[i, i] += cam[i]; Ca[i + 1, i + 1] += cam[i]; Ca[i, i + 1] = Ca[i + 1, i] = -cam[i];
+                // A coupling correction scales only the mutual terms; each line keeps its own capacitance.
+                double sc = mutualScale?[i] ?? 1.0;
+                C[i, i] += cm[i]; C[i + 1, i + 1] += cm[i]; C[i, i + 1] = C[i + 1, i] = -sc * cm[i];
+                Ca[i, i] += cam[i]; Ca[i + 1, i + 1] += cam[i]; Ca[i, i + 1] = Ca[i + 1, i] = -sc * cam[i];
             }
         }
         // L = mu0 eps0 Ca^-1 = Ca^-1 / c^2

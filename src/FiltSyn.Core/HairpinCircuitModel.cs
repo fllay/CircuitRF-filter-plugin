@@ -121,12 +121,14 @@ public sealed class HairpinCircuitModel
         _lossy = lossy;
         int conductors = 2 * g.Order;
         var gapList = new double[conductors - 1];
+        var scale = new double[conductors - 1];
+        var kind = g.TipGap > 0 ? CouplingKind.Mixed : CouplingKind.Hairpin;
         for (int r = 0; r < g.Order; r++)
         {
-            gapList[2 * r] = g.ArmGap;
-            if (r < g.Order - 1) gapList[2 * r + 1] = g.Gaps[r];
+            gapList[2 * r] = g.ArmGap; scale[2 * r] = 1.0;     // a resonator's own arms: covered by the single-resonator fits
+            if (r < g.Order - 1) { gapList[2 * r + 1] = g.Gaps[r]; scale[2 * r + 1] = CouplingCorrection.Scale(kind, g.Substrate, g.Gaps[r]); }
         }
-        _arms = MulticonductorLine.FromMicrostrip(g.Substrate, g.ResonatorWidth, gapList);
+        _arms = MulticonductorLine.FromMicrostrip(g.Substrate, g.ResonatorWidth, gapList, scale);
         _eStatic = Microstrip.Static(g.Substrate, g.ResonatorWidth).EpsEff;
     }
 

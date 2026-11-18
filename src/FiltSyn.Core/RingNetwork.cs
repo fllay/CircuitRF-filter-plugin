@@ -46,7 +46,7 @@ public sealed class RingNetwork
     private readonly List<(int A, int B, double T0, double T1)> _pieceList = new();
     private readonly int _nodeCount;
     private readonly List<(int Seg, double Ta, double Tb, int Na, int Nb)> _single = new();
-    private readonly List<(int[] Lo, int[] Hi, double Len, double Gap)> _coupled = new();
+    private readonly List<(int[] Lo, int[] Hi, double Len, double Gap, double Scale)> _coupled = new();
     private readonly List<(int TipA, int TipB)> _tips = new();
     private readonly int[] _tapNodes;
     private readonly int _probe;
@@ -56,6 +56,7 @@ public sealed class RingNetwork
     {
         public int Ring;
         public double X0, Y0, X1, Y1, Length, PathStart, DeadStart, DeadEnd;
+        public int Role;                                   // 0 tail (gap side), 1 arm, 2 fold
         public bool Horizontal => Math.Abs(Y1 - Y0) < 1e-12;
         public double U0 => Horizontal ? X0 : Y0;        // axis coordinate of the start
         public double Dir => Horizontal ? Math.Sign(X1 - X0) : Math.Sign(Y1 - Y0);
@@ -94,18 +95,18 @@ public sealed class RingNetwork
         }
 
         // Facing sides of every pair of rings: overlapping intervals become coupled sections.
-        var couplings = new List<(int A, int B, double U0, double U1, double Gap)>();
+        var couplings = new List<(int A, int B, double U0, double U1, double Gap, double Scale)>();
         for (int i = 0; i < rings.Count; i++)
             for (int j = i + 1; j < rings.Count; j++)
                 foreach (var c in Facing(ringSegs[i], ringSegs[j])) couplings.Add(c);
-        foreach (var (a, b, u0, u1, _) in couplings)
+        foreach (var (a, b, u0, u1, _, _) in couplings)
         {
             _segs[a].Splits.Add(_segs[a].TAt(u0)); _segs[a].Splits.Add(_segs[a].TAt(u1));
             _segs[b].Splits.Add(_segs[b].TAt(u0)); _segs[b].Splits.Add(_segs[b].TAt(u1));
         }
         // Mirror every split inside a coupled interval onto the partner, so the pieces line up.
         for (int pass = 0; pass < 2; pass++)
-            foreach (var (a, b, u0, u1, _) in couplings)
+            foreach (var (a, b, u0, u1, _, _) in couplings)
             {
                 var sa = _segs[a]; var sb = _segs[b];
                 foreach (var t in sa.Splits.ToList()) { double u = sa.U0 + sa.Dir * t; if (u > u0 + 1e-12 && u < u1 - 1e-12) sb.Splits.Add(sb.TAt(u)); }
@@ -122,8 +123,8 @@ public sealed class RingNetwork
 
         // Pieces: coupled where inside a coupling interval, otherwise single lines.
         var coupledPieces = new HashSet<(int Seg, int Idx)>();
-        var coupledRaw = new List<(int[] Lo, int[] Hi, double Len, double Gap)>();
-        foreach (var (a, b, u0, u1, gap) in couplings)
+        var coupledRaw = new List<(int[] Lo, int[] Hi, double Len, double Gap, double Scale)>();
+        foreach (var (a, b, u0, u1, gap, scale) in couplings)
         {
             var sa = _segs[a]; var sb = _segs[b];
             var us = sa.Splits.Select(t => sa.U0 + sa.Dir * t).Where(u => u >= u0 - 1e-12 && u <= u1 + 1e-12).OrderBy(u => u).ToList();
@@ -134,7 +135,7 @@ public sealed class RingNetwork
                 int ia0 = IndexOf(sa, ta0), ia1 = IndexOf(sa, ta1), ib0 = IndexOf(sb, tb0), ib1 = IndexOf(sb, tb1);
                 coupledPieces.Add((a, Math.Min(ia0, ia1))); coupledPieces.Add((b, Math.Min(ib0, ib1)));
                 double la = Math.Abs(sa.Electrical(ta1) - sa.Electrical(ta0)), lb = Math.Abs(sb.Electrical(tb1) - sb.Electrical(tb0));
-                coupledRaw.Add((new[] { sa.Nodes[ia0], sb.Nodes[ib0] }, new[] { sa.Nodes[ia1], sb.Nodes[ib1] }, 0.5 * (la + lb), gap));
+                coupledRaw.Add((new[] { sa.Nodes[ia0], sb.Nodes[ib0] }, new[] { sa.Nodes[ia1], sb.Nodes[ib1] }, 0.5 * (la + lb), gap, scale));
             }
         }
         var singleRaw = new List<(int Na, int Nb, double Len)>();
@@ -155,7 +156,7 @@ public sealed class RingNetwork
         var map = new Dictionary<int, int>();
         int Id(int n) { int r = uf.Find(n); if (!map.TryGetValue(r, out var id)) { id = map.Count; map[r] = id; } return id; }
         foreach (var p in singleRaw) if (p.Len >= Tiny) _single.Add((-1, 0, p.Len, Id(p.Na), Id(p.Nb)));
-        foreach (var c in coupledRaw) if (c.Len >= Tiny) _coupled.Add((new[] { Id(c.Lo[0]), Id(c.Lo[1]) }, new[] { Id(c.Hi[0]), Id(c.Hi[1]) }, c.Len, c.Gap));
+        foreach (var c in coupledRaw) if (c.Len >= Tiny) _coupled.Add((new[] { Id(c.Lo[0]), Id(c.Lo[1]) }, new[] { Id(c.Hi[0]), Id(c.Hi[1]) }, c.Len, c.Gap, c.Scale));
         foreach (var segIdx in ringSegs) _tips.Add((Id(_segs[segIdx[0]].Nodes[0]), Id(_segs[segIdx[^1]].Nodes[^1])));
         _tapNodes = tapPos.Select(tp => Id(_segs[tp.Seg].NodeAt(tp.T))).ToArray();
         _probe = _tips[0].TipA;
@@ -187,19 +188,21 @@ public sealed class RingNetwork
         double mx = (a.X + b.X) / 2, my = (a.Y + b.Y) / 2;
         var list = new List<int>();
         double path = 0;
+        int role = 0;
         void Add((double X, double Y) s0, (double X, double Y) s1, bool cs, bool ce)
         {
             var sg = new Seg
             {
+                Role = role,
                 Ring = r, X0 = s0.X, Y0 = s0.Y, X1 = s1.X, Y1 = s1.Y, Length = Math.Abs(s1.X - s0.X) + Math.Abs(s1.Y - s0.Y),
                 PathStart = path, DeadStart = cs ? c2 : 0, DeadEnd = ce ? c2 : 0,
             };
             path += sg.Length;
             _segs.Add(sg); list.Add(_segs.Count - 1);
         }
-        Add((mx + dx * g / 2, my + dy * g / 2), b, false, true);
-        for (int k = 1; k <= 3; k++) Add(P[(gs + k) % 4], P[(gs + k + 1) % 4], true, true);
-        Add(a, (mx - dx * g / 2, my - dy * g / 2), true, false);
+        role = 0; Add((mx + dx * g / 2, my + dy * g / 2), b, false, true);
+        for (int k = 1; k <= 3; k++) { role = k == 2 ? 2 : 1; Add(P[(gs + k) % 4], P[(gs + k + 1) % 4], true, true); }
+        role = 0; Add(a, (mx - dx * g / 2, my - dy * g / 2), true, false);
         return list.ToArray();
     }
 
@@ -245,7 +248,7 @@ public sealed class RingNetwork
         throw new ArgumentOutOfRangeException(nameof(pathCoord));
     }
 
-    private IEnumerable<(int A, int B, double U0, double U1, double Gap)> Facing(int[] ra, int[] rb)
+    private IEnumerable<(int A, int B, double U0, double U1, double Gap, double Scale)> Facing(int[] ra, int[] rb)
     {
         int ia0 = _segs[ra[0]].Ring, ib0 = _segs[rb[0]].Ring;
         var pa = Rings[ia0]; var pb = Rings[ib0];
@@ -267,15 +270,19 @@ public sealed class RingNetwork
                 var sb = _segs[ib];
                 if (sb.Horizontal != ySep || Math.Abs(sb.Line - lineB) > 1e-12) continue;
                 double u0 = Math.Max(sa.ULo, sb.ULo), u1 = Math.Min(sa.UHi, sb.UHi);
-                if (u1 - u0 > 1e-9) yield return (ia, ib, u0, u1, gap);
+                if (u1 - u0 > 1e-9)
+                {
+                    var kind = sa.Role == 0 && sb.Role == 0 ? CouplingKind.Electric : sa.Role == 2 && sb.Role == 2 ? CouplingKind.Magnetic : CouplingKind.Mixed;
+                    yield return (ia, ib, u0, u1, gap, CouplingCorrection.Scale(kind, Substrate, gap));
+                }
             }
         }
     }
 
-    private MulticonductorLine Pair(double gap)
+    private MulticonductorLine Pair(double gap, double scale)
     {
-        long key = (long)Math.Round(gap * 1e10);
-        if (!_pairs.TryGetValue(key, out var m)) { m = MulticonductorLine.FromMicrostrip(Substrate, Width, new[] { gap }); _pairs[key] = m; }
+        long key = (long)Math.Round(gap * 1e10) * 100003 + (long)Math.Round(scale * 1e6);
+        if (!_pairs.TryGetValue(key, out var m)) { m = MulticonductorLine.FromMicrostrip(Substrate, Width, new[] { gap }, new[] { scale }); _pairs[key] = m; }
         return m;
     }
 
@@ -295,9 +302,9 @@ public sealed class RingNetwork
             var y12 = y0 * Complex.ImaginaryOne / sin;
             y[a, a] += y11; y[b, b] += y11; y[a, b] += y12; y[b, a] += y12;
         }
-        foreach (var (lo, hi, len, gap) in _coupled)
+        foreach (var (lo, hi, len, gap, scale) in _coupled)
         {
-            var (a11, a12) = Pair(gap).Y(len, fHz, alpha, rho);
+            var (a11, a12) = Pair(gap, scale).Y(len, fHz, alpha, rho);
             for (int i = 0; i < 2; i++)
                 for (int j = 0; j < 2; j++)
                 {
