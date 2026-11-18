@@ -193,6 +193,17 @@ Investigating first-pass errors (rings 4 to 9 % high, hairpins about 5 % high in
    half-wave line came out 3.3 % *low* in EM, so these effects pull the other way), and they were fitted on one substrate
    only. On other substrates run EM once and use the calibration loop.
 
+### Corner correction on three substrates (planar EM, single resonators)
+
+| Substrate | Er | W/h | Ring corner | Hairpin corner |
+|---|---|---|---|---|
+| RT/duroid 5880 0.787 mm | 2.2 | 3.0 | 0.30 to 0.32 W | 0.63 to 0.65 W |
+| RO4350B 0.508 mm | 3.66 | 2.1 | 0.40 W | 0.67 W |
+| RO3010 0.635 mm | 10.2 | 0.88 | 0.52 W | 0.84 W |
+
+Rings follow Gupta's bend model (Hong eq. 4.42) times 0.80 between W/h 2 and 3 and are capped at 0.52 W below (where the
+bend model's inductance fails); hairpins are piecewise linear in Er through the three points.
+
 ## Known limitations
 
 - Closed-form circuit models: nearest-neighbour coupling only; corners via an EM-fitted effective correction (RO4350B and

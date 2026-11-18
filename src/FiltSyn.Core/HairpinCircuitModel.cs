@@ -47,16 +47,21 @@ public sealed record HairpinGeometry(
     /// Default corner shortening for a microstrip ring or hairpin of strip width w; 0 (not characterised) in stripline.
     /// Rings: the EM fit on RO4350B (0.40 W) carried to other substrates by Gupta's right-angle bend model (Hong and
     /// Lancaster eq. 4.42): the measured ring corrections were 0.81 times the bend's electrical shortening on both
-    /// RO4350B 0.508 mm (0.40 W) and RT/duroid 5880 0.787 mm (0.30 to 0.32 W). Hairpins: 0.67 W on RO4350B and 0.64 W on
-    /// RT/duroid 5880, interpolated in Er between the two and held at the end values outside them.
+    /// RO4350B 0.508 mm (0.40 W) and RT/duroid 5880 0.787 mm (0.30 to 0.32 W); RO3010 (W/h 0.88) gave 0.518 W, the cap.
+    /// Hairpins: 0.64, 0.67 and 0.844 W on RT/duroid 5880, RO4350B and RO3010, piecewise linear in Er.
     /// </summary>
     public static double DefaultCornerShortening(Substrate s, double w, bool openLoop = false)
     {
         if (s.IsStripline) return 0.0;
-        // Held between 0.25 and 0.5 W: outside W/h 2.1 to 3.0 and Er 2.2 to 3.66 the scaling is not yet checked against EM.
-        if (openLoop) return Math.Clamp(RingBendFactor * BendShortening(s, w), 0.25, 0.5) * w;
-        double t = Math.Clamp((s.Er - 2.2) / (3.66 - 2.2), 0.0, 1.0);
-        return (0.64 + t * (HairpinCornerShorteningPerWidth - 0.64)) * w;
+        // Held between 0.25 and 0.52 W: below W/h of about 1.5 Gupta's inductance breaks down; planar EM on RO3010 0.635 mm
+        // (Er 10.2, W/h 0.88) gave 0.518 W, which the cap matches.
+        if (openLoop) return Math.Clamp(RingBendFactor * BendShortening(s, w), 0.25, 0.52) * w;
+        // Hairpins: planar EM fits at Er 2.2 (RT/duroid 5880 0.787 mm), 3.66 (RO4350B 0.508 mm) and 10.2 (RO3010 0.635 mm),
+        // piecewise linear in Er between them and held outside.
+        double er = Math.Clamp(s.Er, 2.2, 10.2);
+        double k = er <= 3.66 ? 0.64 + (er - 2.2) / (3.66 - 2.2) * (HairpinCornerShorteningPerWidth - 0.64)
+                              : HairpinCornerShorteningPerWidth + (er - 3.66) / (10.2 - 3.66) * (0.844 - HairpinCornerShorteningPerWidth);
+        return k * w;
     }
 
     /// <summary>

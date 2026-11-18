@@ -105,8 +105,8 @@ OLR1, OLR2, OLR58, OLR58B and their `*_em.s2p` results).
 - Corner correction: `HairpinGeometry.CornerShortening` (NaN means `DefaultCornerShortening`), microstrip only. Rings:
   0.80 x Gupta's bend shortening (`BendShortening`, Hong eq. 4.42, W/h held >= 1.2), anchored to 0.40 W on RO4350B
   0.508 mm, clamped 0.25 to 0.5 W; checked on RT/duroid 5880 0.787 mm (EM 0.30 to 0.32 W, predicted 0.31 W). Hairpins:
-  0.67 W (RO4350B) to 0.64 W (RT5880), linear in Er, held outside. RO3010 (Er 10.2, W/h 0.9) cells CKR*/CKH* exist in
-  `em_cmp` but were not run (planar EM there is slow: about 15 s a point); run them with ~61 points to extend the fit.
+  0.64 / 0.67 / 0.844 W at Er 2.2 / 3.66 / 10.2, piecewise linear. Rings cap at 0.52 W (RO3010 measured 0.518 W).
+  RO3010 cells CKR24/CKR58/CKH24 in `em_cmp` are not run yet (slow: use ~61 points, about 10 min each).
   Generator: `/tmp/cf` C# tool in the session (gen/fit modes; regenerate from the description here if lost). A tap inside a corner region is clamped to
   the corner so the fold keeps its corrected length (this mattered: without it narrowband hairpin taps landed in the dead
   zone and broke the response).
