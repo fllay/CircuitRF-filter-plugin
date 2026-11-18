@@ -190,7 +190,15 @@ New designs with the corrected model, planar EM (RO4350B 0.508 mm):
 | VH30B hairpin 3.0 GHz / 35 MHz: centre, 3 dB bandwidth | 2.990 GHz, 41.1 MHz | 3.000 GHz, 42.5 MHz |
 | VH30B in-band S11, midband loss | -11.7 dB, 8.9 dB | -13 dB, (lossy model 12.7 dB) |
 
+| QE36B cross-coupled rings 3.6 GHz / 120 MHz: centre, 3 dB bandwidth | 3.567 GHz, 116 MHz | 3.600 GHz, 141 MHz (lossy model 120) |
+| QE36B transmission zeros | 3.434 GHz (-43 dB), 3.672 GHz (-25 dB) | 3.428 / 3.748 (ideal 3.482 / 3.722) |
+| QE36B midband loss, worst in-band S11 | 3.7 dB, -5.8 dB | lossy model 4.1 dB, -13.7 dB |
+
 The lossy model overstates the loss of narrow filters (12.7 against 8.9 dB here), so its loss figure is conservative.
+The cross-coupled filter now has the right bandwidth and both zeros (the first one had 72 MHz and one zero), but its
+centre is 0.9 % low and the passband match is poor (-6 to -12 dB ripple): the two rows still resonate slightly apart in
+EM. Next step: an EM-fitted per-row frequency correction (the top and bottom rings see different neighbours), then the
+calibration loop for the centre.
 
 Consequence: same-orientation hairpins on RO4350B 0.508 mm reach only k of about 0.012 (EM), so a 4-pole hairpin wider
 than about 1.4 % is refused with that reason; use the open-loop ring chain (k up to 0.14 to 0.19) for wider bands. The

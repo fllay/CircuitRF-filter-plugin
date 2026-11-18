@@ -132,6 +132,9 @@ OLR1, OLR2, OLR58, OLR58B and their `*_em.s2p` results).
 
 ## 6. Suggested next steps (not done)
 
+-2. Cross-coupled ring match: QE36B (designed with the correction) gives 116 MHz and both zeros in EM but -6 dB worst
+   in-band S11 and centre -0.9 %; the rows detune differently in EM than in the model. Extract each ring's loaded
+   resonance in EM (one ring of the 2x2 probed weakly with the others present) and correct per row.
 -1. Repeat the pair sweep on a second substrate (RT/duroid 5880 0.787 mm cells can be generated the same way) to confirm
    that the correction depends on s/h alone; hairpins with other arm gaps (the hairpin ratio may depend on the arm gap).
 
